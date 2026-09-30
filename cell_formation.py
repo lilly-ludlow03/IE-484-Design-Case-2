@@ -1,23 +1,10 @@
-"""
-Advanced cellular manufacturing design
---------------------------------------
-Stage 0  Data model + workload / machine requirements
-Stage 1  Composite similarity (machine Jaccard + routing sequence LCS + workload)
-Stage 2  Candidate groupings (hierarchical clustering, k = 2..MAX_CELLS), scored by grouping efficacy
-Stage 3  Integrated MILP: part->cell, machine copies per cell, capacity, operation splitting
-Stage 4  (warm start of the MILP from the best Stage 2 candidate)
-Stage 5  Intra-cell U-shape layout (QAP solved by local search)
-Stage 6  Validation: demand sensitivity and machine-loss scenarios
-
-Requires: numpy, scipy, pulp   (pip install numpy scipy "pulp<3")
-"""
 import math, random, itertools
 import numpy as np
 import pulp
 from scipy.cluster.hierarchy import linkage, fcluster
 from scipy.spatial.distance import squareform
 
-# routing data: part -> [(machine type, hours per unit), ...] in sequence
+# routing data: part -> [(machine type, hours per unit), ...]
 ROUTING = {
     "A": [(4, .36), (7, .25), (8, .17)],
     "B": [(1, .30), (2, .20), (3, .30)],
@@ -46,17 +33,17 @@ PRODUCTS = {
 
 # capacity assumptions
 HOURS_PER_WEEK = 40
-SETUP_DOWNTIME = 1            # hr/week lost to setup and tear-down
-WEEKS_PER_YEAR = 52           # assumption, change if needed
+SETUP_DOWNTIME = 1            # setup and tear-down
+WEEKS_PER_YEAR = 50           # holidays, time off
 TARGET_UTIL = 0.74
-MACHINE_CAPACITY = 0.92       # machine efficiency/availability factor
+MACHINE_CAPACITY = 0.92
 MAX_CELLS = 5
-MAX_MACHINES_PER_CELL = 15    # cell size limit (assumption)
+MAX_MACHINES_PER_CELL = 100    # cell size limit (as many machines as needed per cell)
 
 # objective weights for the MILP
 ALPHA = 5.0      # per 1000 units of inter-cell operations
 BETA = 2.0       # per machine copy placed
-GAMMA = 0.002    # per hour of workload in the busiest cell (balance)
+GAMMA = 0.002    # per hour of workload in the busiest cell
 DELTA = 5.0      # per cell opened
 
 # similarity weights
@@ -99,9 +86,7 @@ def stage0_report(D):
     print()
 
 
-# ----------------------------------------------------------------------------
-# STAGE 1: COMPOSITE SIMILARITY
-# ----------------------------------------------------------------------------
+# Similarity matrix
 def lcs(a, b):
     dp = [[0] * (len(b) + 1) for _ in range(len(a) + 1)]
     for i in range(len(a)):
@@ -125,9 +110,7 @@ def similarity_matrix():
     return S
 
 
-# ----------------------------------------------------------------------------
-# STAGE 2: CANDIDATE GROUPINGS + GROUPING EFFICACY
-# ----------------------------------------------------------------------------
+# Groupings and grouping efficacy
 def grouping_efficacy(assign):
     """assign: part -> cell. Each machine type goes to the cell using it most."""
     cells = sorted(set(assign.values()))
@@ -163,9 +146,7 @@ def stage2_candidates(S):
     return out
 
 
-# ----------------------------------------------------------------------------
-# STAGE 3: INTEGRATED MILP
-# ----------------------------------------------------------------------------
+# MILP
 def solve_milp(D, warm=None, time_limit=120, verbose=True, owned=None):
     owned = owned or OWNED
     H = effective_hours()
@@ -201,7 +182,7 @@ def solve_milp(D, warm=None, time_limit=120, verbose=True, owned=None):
         prob += pulp.lpSum(y[m, c] for m in MACHINES) <= MAX_MACHINES_PER_CELL
         prob += Lmax >= pulp.lpSum(D[p] * sum(T[p].values()) * x[p, c] for p in PARTS)
         if c < MAX_CELLS - 1:
-            prob += u[c] >= u[c + 1]                              # symmetry breaking
+            prob += u[c] >= u[c + 1]
 
     if warm:
         used = sorted(set(warm.values()))
@@ -270,9 +251,7 @@ def print_solution(sol, D):
     print()
 
 
-# ----------------------------------------------------------------------------
-# STAGE 5: INTRA-CELL U-SHAPE LAYOUT (QAP by local search)
-# ----------------------------------------------------------------------------
+# QAP for cell layout
 def u_slots(n):
     """Slot coordinates on a U: down the left arm, up the right arm."""
     k = math.ceil(n / 2)
@@ -299,7 +278,7 @@ def layout_cell(c, sol, D, seed=0):
 
     rng = random.Random(seed)
     best, best_cost = None, float("inf")
-    for _ in range(30):                       # random restarts + 2-swap descent
+    for _ in range(30):
         perm = list(range(n))
         rng.shuffle(perm)
         cur = cost(perm)
@@ -317,7 +296,7 @@ def layout_cell(c, sol, D, seed=0):
             best, best_cost = perm[:], cur
     order = sorted(range(n), key=lambda i: best[i])       # machine types by slot number
     layout = [types[i] for i in order]
-    # backtracking = flow that moves to an earlier slot around the U (higher slot -> lower slot)
+    # flow that moves to an earlier slot around the U (higher slot -> lower slot)
     slot_of = {types[i]: best[i] for i in range(n)}
     back = sum(flow[i, j] for i in range(n) for j in range(n) if best[i] > best[j])
     total = flow.sum()
@@ -335,10 +314,7 @@ def stage5(sol, D):
         print(f"   right arm (top->bottom): {right}")
         print(f"   flow-distance cost {cost:,.0f}, backtracking {back:.0%} of moves\n")
 
-
-# ----------------------------------------------------------------------------
-# STAGE 6: VALIDATION
-# ----------------------------------------------------------------------------
+# Validating results
 def stage6(D):
     print("=== STAGE 6: robustness ===")
     H = effective_hours()
