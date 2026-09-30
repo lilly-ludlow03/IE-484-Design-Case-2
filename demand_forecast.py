@@ -62,7 +62,7 @@ def print_scenario(name, rates):
     print("\nProduct demand (units/year):")
     print(f"{'Year':>5} {'Rate':>7} " + " ".join(f"{'Prod ' + str(k):>9}" for k in PRODUCTS))
     for y in range(TOTAL_YEARS + 1):
-        rate = "-" if y == 0 else f"{rates[y - 1]:+.1'%'}"
+        rate = "-" if y == 0 else f"{rates[y - 1]:+.1%}"
         print(f"{y:>5} {rate:>7} " + " ".join(f"{v['demand'] * idx[y]:>9,.0f}" for v in PRODUCTS.values()))
 
     print("\nMachines required (rounded up)   [* = exceeds machines owned]")
@@ -115,12 +115,12 @@ def print_mc(idx, req):
         mt = np.percentile(tot[:, y], [10, 50, 90])
         short_any = (req[:, y, :] > OWN).any(axis=1).mean()
         print(f"{y:>5} {di[0]:>15.2f} {di[1]:>7.2f} {di[2]:>7.2f} | "
-              f"{mt[0]:>12.0f} {mt[1]:>5.0f} {mt[2]:>5.0f} | {short_any:>18.0'%'}")
+              f"{mt[0]:>12.0f} {mt[1]:>5.0f} {mt[2]:>5.0f} | {short_any:>18.0%}")
     print("\nProbability each machine type is short of owned copies, by year:")
     print(f"{'Year':>5} " + " ".join(f"{'M' + str(m):>5}" for m in MACHINES))
     for y in range(TOTAL_YEARS + 1):
         p = (req[:, y, :] > OWN).mean(axis=0)
-        print(f"{y:>5} " + " ".join(f"{v:>5.0'%'}" for v in p))
+        print(f"{y:>5} " + " ".join(f"{v:>5.0%}" for v in p))
     p90_peak = req.max(axis=1)                                     # (N, 10) peak over horizon
     buy90 = np.percentile(np.maximum(p90_peak - OWN, 0), 90, axis=0).astype(int)
     print("\nExtra copies needed to be 90'%' safe over the full horizon: " +

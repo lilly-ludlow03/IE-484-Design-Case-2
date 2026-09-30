@@ -37,10 +37,10 @@ SETUP_DOWNTIME = 1            # setup and tear-down
 WEEKS_PER_YEAR = 50           # holidays, time off
 TARGET_UTIL = 0.74
 MACHINE_CAPACITY = 0.92
-MAX_CELLS = 5
+MAX_CELLS = 5                  # maximum number of cells allowed
 MAX_MACHINES_PER_CELL = 100    # cell size limit (as many machines as needed per cell)
 
-# objective weights for the MILP
+# weights for the MILP
 ALPHA = 5.0      # per 1000 units of inter-cell operations
 BETA = 2.0       # per machine copy placed
 GAMMA = 0.002    # per hour of workload in the busiest cell
